@@ -1,0 +1,13 @@
+# default
+__pycache__
+*/__pycache__
+.DS_Store
+.vscode
+.idea
+
+# logs
+*.log
+runs/
+
+# others
+*.npy
