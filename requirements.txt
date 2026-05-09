@@ -1,4 +1,5 @@
-# STDG-NRDEN — see DEPENDENCIES_AND_COMPUTE.md. Also install ONE of:
+# STDG-NRDEN (Spatio-Temporal Dynamic Graph Neural Rough Differential Equation Network for Chlorophyll-a Concentration Prediction)
+# See DEPENDENCIES_AND_COMPUTE.md. Also install ONE of:
 #   pip install iisignature
 #   pip install signatory
 # Optional: tensorboard (for --tensorboard)

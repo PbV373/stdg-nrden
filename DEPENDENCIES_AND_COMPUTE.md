@@ -1,6 +1,6 @@
 # Dependencies and computational requirements
 
-This document complements `README.md` and `requirements.txt` with explicit software stack notes and rough hardware guidance for STDG-NRDEN training and evaluation.
+This document complements `README.md` and `requirements.txt` with explicit software stack notes and rough hardware guidance for **STDG-NRDEN** (*Spatio-Temporal Dynamic Graph Neural Rough Differential Equation Network for Chlorophyll-a Concentration Prediction*) training and evaluation.
 
 ## Python packages
 

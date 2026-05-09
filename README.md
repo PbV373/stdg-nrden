@@ -1,6 +1,8 @@
 # STDG-NRDEN
 
-Official short name for the accompanying paper: **STDG-NRDEN** (Spatio-Temporal Dynamic Graph — Neural Rough Differential Equation Network). The implementation builds on neural controlled / rough differential equations with a graph-structured spatial module.
+**Paper:** *Spatio-Temporal Dynamic Graph Neural Rough Differential Equation Network for Chlorophyll-a Concentration Prediction.*
+
+**STDG-NRDEN** is the official short name for this method. The implementation combines neural controlled / rough differential equations with a graph-structured spatial module to predict **chlorophyll-a concentration** in maritime grids.
 
 ## License
 
@@ -22,7 +24,7 @@ For environments that **reject single opaque archives** (e.g. `.zip`, `.rar`, `.
 
 Dataset identifiers are **`nanhai`** (South China Sea grid) and **`bohai`** (Bohai Sea grid). Configs are named `model/<dataset>_NRDEN.conf`. Logs go under `runs/<dataset>/`. Optional test weights: `pre-trained/<dataset>.pth`.
 
-**Suggested repository name on GitHub:** `STDG-NRDEN` or `STDG-NRDEN-code`.
+**Repository:** [github.com/PbV373/stdg-nrden](https://github.com/PbV373/stdg-nrden) (short name `stdg-nrden`; method acronym **STDG-NRDEN**).
 
 ## Installation
 
@@ -118,8 +120,10 @@ Config file sections (`[data]`, `[model]`, `[train]`, `[test]`, `[log]`) map to 
 - **Exact paper numbers:** bit-exact reproduction may require the **same random seeds**, **deterministic mode**, **solver settings**, **log-signature backend**, and **full proprietary grids** if those were not redistributed.
 - **Synthetic fallback:** if you cannot share real observations, you can still validate the implementation by generating synthetic spatio-temporal tensors of shape `[T, N, 1]`, saving them with `deal_dataset.py`-compatible NPZ layout, and tuning `num_nodes` in the config accordingly. Document any domain shift relative to the paper.
 
-When the paper is public, add a BibTeX block under **Citation** below.
-
 ## Citation
 
-If you use this code, please cite the paper (add BibTeX after publication).
+If you use this code, please cite:
+
+> Spatio-Temporal Dynamic Graph Neural Rough Differential Equation Network for Chlorophyll-a Concentration Prediction.
+
+After publication, add the official BibTeX entry below.
