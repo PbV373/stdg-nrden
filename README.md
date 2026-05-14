@@ -22,7 +22,7 @@ For environments that **reject single opaque archives** (e.g. `.zip`, `.rar`, `.
 | `data/scripts/` | `deal_dataset.py` (CSV → NPZ), helpers `verify.py`, `change.py`, etc. |
 | `controldiffeq/` | Neural CDE integration utilities |
 
-Dataset identifiers are **`nanhai`** (South China Sea grid) and **`bohai`** (Bohai Sea grid). Configs are named `model/<dataset>_NRDEN.conf`. Logs go under `runs/<dataset>/`. Optional test weights: `pre-trained/<dataset>.pth`.
+Dataset identifiers are **`nanhai`** (South China Sea grid) and **`bohai`** (Bohai Sea grid). Configs are named `model/{dataset}_NRDEN.conf`. Logs go under `runs/{dataset}/`. Optional test weights: `pre-trained/{dataset}.pth`.
 
 **Repository:** [github.com/PbV373/stdg-nrden](https://github.com/PbV373/stdg-nrden) (short name `stdg-nrden`; method acronym **STDG-NRDEN**).
 
@@ -32,18 +32,17 @@ From the repository root:
 
 ```bash
 pip install -r requirements.txt
-# Install exactly one log-signature backend:
-pip install iisignature   # often easiest on Windows
-# or: pip install signatory  # common on Linux/macOS if compatible with your PyTorch
 ```
 
 Install a **CUDA-enabled PyTorch** build that matches your system from [pytorch.org](https://pytorch.org).
+
+`requirements.txt` installs `iisignature` as the default log-signature backend. Advanced users may replace it with a PyTorch-compatible `signatory` build if preferred.
 
 See **[DEPENDENCIES_AND_COMPUTE.md](DEPENDENCIES_AND_COMPUTE.md)** for package roles, optional TensorBoard, and hardware notes.
 
 ## Data layout and preparation
 
-Training expects **`data/<dataset>.npz`** with a single array **`data`** of shape **`[time_steps, num_nodes, num_features]`** (typically one channel per node). `lib/load_dataset.py` will transpose if it detects `[nodes, time, …]`.
+Training expects **`data/{dataset}.npz`** with a single array **`data`** of shape **`[time_steps, num_nodes, num_features]`** (typically one channel per node). `lib/load_dataset.py` will transpose if it detects `[nodes, time, ...]`.
 
 ### Build NPZ from CSV (recommended path)
 
@@ -74,11 +73,11 @@ python model/Run_cde.py --dataset nanhai --mode train
 python model/Run_cde.py --dataset bohai --mode train
 ```
 
-Hyperparameters are read from `model/<dataset>_NRDEN.conf`. Ensure `num_nodes` matches the second dimension of `data['data']` after any transpose.
+Hyperparameters are read from `model/{dataset}_NRDEN.conf`. Ensure `num_nodes` matches the second dimension of `data['data']` after any transpose.
 
 ### 2) Evaluate with a saved checkpoint
 
-Place weights at `pre-trained/<dataset>.pth`, then:
+Place weights at `pre-trained/{dataset}.pth`, then:
 
 ```bash
 python model/Run_cde.py --dataset nanhai --mode test
@@ -96,8 +95,8 @@ If import fails (often due to old TensorFlow/TensorBoard vs NumPy 2.x), training
 
 | Option | Role |
 |--------|------|
-| `--dataset` | `nanhai` or `bohai`; selects config `model/<dataset>_<model>.conf`, NPZ path, log subfolder |
-| `--model` | Config stem suffix (default `NRDEN`) → reads `model/<dataset>_<model>.conf` |
+| `--dataset` | `nanhai` or `bohai`; selects config `model/{dataset}_{model}.conf`, NPZ path, log subfolder |
+| `--model` | Config stem suffix (default `NRDEN`) -> reads `model/{dataset}_{model}.conf` |
 | `--mode` | `train` or `test` |
 | `--device` | GPU index (CUDA) |
 | `--deterministic` | More reproducible, slower (disables `cudnn.benchmark`) |
@@ -110,9 +109,9 @@ Config file sections (`[data]`, `[model]`, `[train]`, `[test]`, `[log]`) map to 
 - `num_nodes` — must match data  
 - `normalizer`, `val_ratio`, `test_ratio` — preprocessing and splits  
 
-**Training outputs:** a timestamped directory under `runs/<dataset>/` with logs; metrics are printed via the trainer logger.
+**Training outputs:** a timestamped directory under `runs/{dataset}/` with logs; metrics are printed via the trainer logger.
 
-**Test behaviour:** loads `pre-trained/<dataset>.pth` and runs the test loop; ensure the checkpoint matches the model configuration.
+**Test behaviour:** loads `pre-trained/{dataset}.pth` and runs the test loop; ensure the checkpoint matches the model configuration.
 
 ## Reproducibility and limitations
 

@@ -57,7 +57,7 @@ class Trainer(object):
                 output = self.model(self.times, valid_coeffs)
                 if self.args.real_value:
                     label = self.scaler.inverse_transform(label)
-                loss = self.loss(output.cuda(), label)
+                loss = self.loss(output.to(self.device), label)
                 #a whole batch of Metr_LA is filtered
                 if not torch.isnan(loss):
                     total_val_loss += loss.item()
@@ -83,7 +83,7 @@ class Trainer(object):
             output = self.model(self.times, train_coeffs)
             if self.args.real_value:
                 label = self.scaler.inverse_transform(label)
-            loss = self.loss(output.cuda(), label)
+            loss = self.loss(output.to(self.device), label)
 
             loss.backward()
 
@@ -220,7 +220,7 @@ class Trainer(object):
     @staticmethod
     def test(model, args, data_loader, scaler, logger, path, times):
         if path != None:
-            check_point = torch.load(path)
+            check_point = torch.load(path, map_location=args.device)
             state_dict = check_point['state_dict']
             args = check_point['config']
             model.load_state_dict(state_dict)
@@ -256,7 +256,7 @@ class Trainer(object):
     @staticmethod
     def test_simple(model, args, data_loader, scaler, logger, path, times):
         if path != None:
-            check_point = torch.load(path)
+            check_point = torch.load(path, map_location=args.device)
             state_dict = check_point['state_dict']
             args = check_point['config']
             model.load_state_dict(state_dict)

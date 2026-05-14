@@ -1,6 +1,13 @@
 import torch
 import numpy as np
 import torch.utils.data
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from lib.add_window import Add_Window_Horizon
 from lib.load_dataset import load_st_dataset
 from lib.normalization import NScaler, MinMax01Scaler, MinMax11Scaler, StandardScaler, ColumnMinMaxScaler
@@ -381,6 +388,10 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--missing_test', default=False, type=bool)
     parser.add_argument('--missing_rate', default=0.1, type=float)
+    parser.add_argument('--column_wise', default=True, type=bool)
+    parser.add_argument('--signature_depth', default=1, type=int)
+    parser.add_argument('--logsig_spline_substeps', default=4, type=int)
+    parser.add_argument('--logsig_concat_raw', default=True, type=bool)
     args = parser.parse_args()
     train_dataloader, val_dataloader, test_dataloader, scaler, times = get_dataloader_cde(
         args, normalizer='std', tod=False, dow=False, weather=False, single=True)

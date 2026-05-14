@@ -16,9 +16,9 @@ Core pins are listed in `requirements.txt`:
 | tqdm | Progress display |
 | torchdiffeq | ODE / CDE solvers (used by `controldiffeq`) |
 
-**Log-signature backend (required):** install **exactly one** of:
+**Log-signature backend (required):** `requirements.txt` installs `iisignature` as the default backend. Advanced users may replace it with a PyTorch-compatible `signatory` build if preferred.
 
-- `iisignature` — recommended on Windows; used with prefix cumulants when `stream=True` is unavailable.
+- `iisignature` — default in this repository; recommended on Windows; used with prefix cumulants when `stream=True` is unavailable.
 - `signatory` — common on Linux/macOS; must be compatible with your PyTorch build.
 
 Optional:

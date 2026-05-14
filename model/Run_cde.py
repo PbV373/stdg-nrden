@@ -111,8 +111,8 @@ class WarmupCosineScheduler:
 # *************************************************************************#
 Mode = 'train'
 DEBUG = 'False'
-DATASET = 'nanhai'  # nanhai / bohai; data at data/<name>.npz; logs under runs/<name>/; weights pre-trained/<name>.pth
-MODEL = 'NRDEN'  # config model/<dataset>_<MODEL>.conf
+DATASET = 'nanhai'  # nanhai / bohai; data at data/{name}.npz; logs under runs/{name}/; weights pre-trained/{name}.pth
+MODEL = 'NRDEN'  # config model/{dataset}_{MODEL}.conf
 
 # Parse --dataset / --model early so config path and log dirs stay consistent
 for i, arg in enumerate(sys.argv):
@@ -288,7 +288,9 @@ init_seed(args.seed, cudnn_benchmark=not args.deterministic)
 
 GPU_NUM = args.device
 device = torch.device(f'cuda:{GPU_NUM}' if torch.cuda.is_available() else 'cpu')
-torch.cuda.set_device(device)  # change allocation of current GPU
+if device.type == 'cuda':
+    torch.cuda.set_device(device)  # change allocation of current GPU
+args.device = device
 
 print(args)
 
@@ -486,7 +488,7 @@ trainer = Trainer(model, vector_field_f, vector_field_g, loss, optimizer, train_
 if args.mode == 'train':
     trainer.train()
 elif args.mode == 'test':
-    model.load_state_dict(torch.load(rel_to_root('pre-trained', f'{args.dataset}.pth')))
+    model.load_state_dict(torch.load(rel_to_root('pre-trained', f'{args.dataset}.pth'), map_location=args.device))
     print("Load saved model")
     trainer.test(model, trainer.args, test_loader, scaler, trainer.logger, times)
 else:

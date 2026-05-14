@@ -1,7 +1,7 @@
 # STDG-NRDEN (Spatio-Temporal Dynamic Graph Neural Rough Differential Equation Network for Chlorophyll-a Concentration Prediction)
-# See DEPENDENCIES_AND_COMPUTE.md. Also install ONE of:
-#   pip install iisignature
-#   pip install signatory
+# See DEPENDENCIES_AND_COMPUTE.md.
+# iisignature is the default log-signature backend. Advanced users may replace
+# it with a PyTorch-compatible signatory build if preferred.
 # Optional: tensorboard (for --tensorboard)
 
 torch>=2.0,<2.7
@@ -14,3 +14,4 @@ scikit-learn>=1.3
 matplotlib>=3.8
 tqdm>=4.67
 torchdiffeq>=0.2
+iisignature>=0.24
