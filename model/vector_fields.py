@@ -36,7 +36,7 @@ class FinalTanh_f(nn.Module):
 
 class VectorField_g_optimized(nn.Module):
     """
-    优化版的动态图构建方法，提高训练稳定性
+    Optimized dynamic graph construction for improved training stability.
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
@@ -50,26 +50,26 @@ class VectorField_g_optimized(nn.Module):
         self.num_hidden_layers = num_hidden_layers
         self.num_nodes = num_nodes
         self.device = device
-        self.alpha = alpha  # 降低alpha值，减少动态图变化幅度
+        self.alpha = alpha  # Limit dynamic graph variation
         self.topk = topk
         self.use_residual = use_residual
         self.use_layer_norm = use_layer_norm
-        self.g_type = g_type  # 先设置g_type，然后再使用它
+        self.g_type = g_type  # Set g_type before using it
 
-        # 简化输入变换
+        # Simplified input transform
         self.linear_in = nn.Linear(hidden_channels, hidden_hidden_channels)
         self.linear_out = nn.Linear(hidden_hidden_channels, hidden_channels * hidden_channels)
 
-        # 初始化权重
+        # Initialize weights
         nn.init.xavier_uniform_(self.linear_in.weight)
         nn.init.xavier_uniform_(self.linear_out.weight)
 
-        # 动态图构建参数 - 减少参数数量
-        node_dim = min(32, hidden_hidden_channels)  # 限制节点嵌入维度
+        # Dynamic graph construction parameters
+        node_dim = min(32, hidden_hidden_channels)  # Limit node embedding dimension
         self.emb1 = nn.Embedding(self.num_nodes, node_dim)
         self.emb2 = nn.Embedding(self.num_nodes, node_dim)
 
-        # 初始化嵌入层
+        # Initialize embedding layers
         nn.init.normal_(self.emb1.weight, mean=0, std=0.01)
         nn.init.normal_(self.emb2.weight, mean=0, std=0.01)
 
@@ -81,19 +81,19 @@ class VectorField_g_optimized(nn.Module):
 
         self.idx = torch.arange(self.num_nodes).to(self.device)
 
-        # 简化的图卷积层 - 减少层数
+        # Simplified graph convolution layers
         self.gcn_layers = nn.ModuleList()
-        for i in range(min(2, num_hidden_layers)):  # 最多2层
+        for i in range(min(2, num_hidden_layers)):  # At most two layers
             layer = nn.Sequential(
                 nn.Linear(hidden_hidden_channels, hidden_hidden_channels),
                 nn.ReLU(),
                 nn.Dropout(dropout_rate)
             )
-            # 初始化GCN层
+            # Initialize GCN layers
             nn.init.xavier_uniform_(layer[0].weight)
             self.gcn_layers.append(layer)
 
-        # 添加层归一化
+        # Add layer normalization
         if self.use_layer_norm:
             self.layer_norm = nn.LayerNorm(hidden_hidden_channels)
 
@@ -103,12 +103,12 @@ class VectorField_g_optimized(nn.Module):
             self.adaptive_sparsifier = AdaptiveGraphSparsification(
                 num_nodes=num_nodes,
                 hidden_dim=hidden_hidden_channels,
-                min_topk=5,  # 最小邻居数
-                max_topk=30,  # 最大邻居数
+                min_topk=5,  # Minimum number of neighbors
+                max_topk=30,  # Maximum number of neighbors
                 temperature=1.0
             )
-        # 保留原有的自适应图卷积参数用于兼容
-        # 注意：现在在设置self.g_type之后才使用它
+        # Keep adaptive graph convolution parameters for compatibility
+        # Use self.g_type only after it is set
         if self.g_type == 'agc':
             self.node_embeddings = nn.Parameter(torch.randn(num_nodes, embed_dim), requires_grad=True)
             self.cheb_k = cheb_k
@@ -116,43 +116,43 @@ class VectorField_g_optimized(nn.Module):
                 torch.FloatTensor(embed_dim, cheb_k, hidden_hidden_channels, hidden_hidden_channels))
             self.bias_pool = nn.Parameter(torch.FloatTensor(embed_dim, hidden_hidden_channels))
 
-            # 初始化静态图参数
+            # Initialize static graph parameters
             nn.init.normal_(self.node_embeddings, mean=0, std=0.01)
 
     def build_stable_dynamic_graph(self, z):
         """
-        构建稳定的动态图结构
-        z: 输入特征 [batch_size, num_nodes, hidden_dim]
+        Build a stable dynamic graph structure.
+        z: input features [batch_size, num_nodes, hidden_dim]
         """
         batch_size, num_nodes, hidden_dim = z.shape
 
-        # 获取节点嵌入
+        # Get node embeddings
         nodevec1 = self.emb1(self.idx)  # [num_nodes, node_dim]
         nodevec2 = self.emb2(self.idx)  # [num_nodes, node_dim]
 
-        # 扩展节点嵌入到batch维度
+        # Expand node embeddings to the batch dimension
         nodevec1 = nodevec1.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, num_nodes, node_dim]
         nodevec2 = nodevec2.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, num_nodes, node_dim]
 
-        # 使用输入特征轻微调整节点嵌入 - 降低调整幅度
-        z_light = self.linear_in(z)  # 轻量变换
+        # Slightly adjust node embeddings using input features
+        z_light = self.linear_in(z)  # Lightweight transform
         z_light = F.relu(z_light)
 
-        # 更温和的特征融合
+        # Smoother feature fusion
         nodevec1 = torch.tanh(self.alpha * 0.5 * (nodevec1 + z_light[:, :, :nodevec1.size(-1)]))
         nodevec2 = torch.tanh(self.alpha * 0.5 * (nodevec2 + z_light[:, :, :nodevec2.size(-1)]))
 
-        # 构建更稳定的邻接矩阵
+        # Build a stable adjacency matrix
         adj = torch.bmm(nodevec1, nodevec2.transpose(1, 2))  # [batch_size, num_nodes, num_nodes]
 
-        # 使用更温和的激活函数
-        adj = F.softplus(adj)  # 比ReLU更平滑
+        # Use a smoother activation function
+        adj = F.softplus(adj)  # Smoother than ReLU
 
         if self.use_adaptive_sparse:
-            # 使用自适应稀疏化
+            # Use adaptive sparsification
             adj = self.adaptive_sparsifier(adj, z_light, method=self.sparsify_method)
         else:
-            # 原有的固定topk稀疏化
+            # Original fixed top-k sparsification
             if self.topk > 0 and self.topk < num_nodes:
                 topk_values, topk_indices = torch.topk(adj, self.topk, dim=-1)
                 mask = torch.zeros_like(adj)
@@ -160,15 +160,15 @@ class VectorField_g_optimized(nn.Module):
                 adj = adj * mask
 
 
-        # 添加自连接并归一化
+        # Add self-connections and normalize
         identity = torch.eye(num_nodes).unsqueeze(0).to(self.device)
-        adj = 0.7 * adj + 0.3 * identity  # 更强的自连接权重
+        adj = 0.7 * adj + 0.3 * identity  # Stronger self-connection weight
 
-        # 对称化处理，增加稳定性
+        # Symmetrize to improve stability
         adj = 0.5 * (adj + adj.transpose(1, 2))
 
         row_sum = adj.sum(dim=-1, keepdim=True)
-        adj = adj / (row_sum + 1e-8)  # 归一化
+        adj = adj / (row_sum + 1e-8)  # Normalize
 
         return adj
 
@@ -176,31 +176,31 @@ class VectorField_g_optimized(nn.Module):
         # z: [batch_size, num_nodes, hidden_channels]
         batch_size, num_nodes, _ = z.shape
 
-        # 线性变换
+        # Linear transform
         z_transformed = self.linear_in(z)
         z_transformed = F.relu(z_transformed)
 
-        # 构建稳定的动态图
+        # Build a stable dynamic graph
         adj = self.build_stable_dynamic_graph(z)  # [batch_size, num_nodes, num_nodes]
 
-        # 应用简化的图卷积
+        # Apply simplified graph convolution
         z_gcn = z_transformed
         for i, gcn_layer in enumerate(self.gcn_layers):
-            # 图卷积：z = A * z * W
+            # Graph convolution: z = A * z * W
             z_gcn_new = torch.bmm(adj, z_gcn)  # [batch_size, num_nodes, hidden_dim]
             z_gcn_new = gcn_layer(z_gcn_new)
 
-            # 残差连接
+            # Residual connection
             if self.use_residual and z_gcn_new.shape == z_gcn.shape:
                 z_gcn = z_gcn + z_gcn_new
             else:
                 z_gcn = z_gcn_new
 
-        # 层归一化
+        # Layer normalization
         if self.use_layer_norm:
             z_gcn = self.layer_norm(z_gcn)
 
-        # 输出变换
+        # Output transform
         z_out = self.linear_out(z_gcn)
         z_out = z_out.view(batch_size, num_nodes, self.hidden_channels, self.hidden_channels)
         z_out = torch.tanh(z_out)
@@ -208,70 +208,70 @@ class VectorField_g_optimized(nn.Module):
         return z_out
 
     def get_adjacency_matrix(self):
-        """获取动态图的邻接矩阵（用于可视化）"""
+        """Get the dynamic graph adjacency matrix for visualization."""
         with torch.no_grad():
-            # 使用随机输入获取示例邻接矩阵
+            # Use random input to obtain an example adjacency matrix
             dummy_input = torch.randn(1, self.num_nodes, self.hidden_channels).to(self.device)
             adj = self.build_stable_dynamic_graph(dummy_input)
-            return adj.squeeze(0)  # 移除batch维度，返回 [num_nodes, num_nodes]
+            return adj.squeeze(0)  # Remove the batch dimension and return [num_nodes, num_nodes]
 
 
 class VectorField_g_hybrid(nn.Module):
     """
-    混合图构建：结合静态图和动态图的优点
+    Hybrid graph construction that combines static and dynamic graph advantages.
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
                  num_nodes, cheb_k, embed_dim, g_type, device,
-                 dynamic_weight=0.3, static_weight=0.7,  # 静态图权重更高
+                 dynamic_weight=0.3, static_weight=0.7,  # Higher static graph weight
                  **kwargs):
         super(VectorField_g_hybrid, self).__init__()
 
         self.dynamic_weight = dynamic_weight
         self.static_weight = static_weight
-        self.g_type = g_type  # 保存g_type
+        self.g_type = g_type  # Store g_type
 
-        # 静态图组件（原有的方法）
+        # Static graph component from the original method
         self.static_gcn = VectorField_g(
             input_channels, hidden_channels, hidden_hidden_channels,
             num_hidden_layers, num_nodes, cheb_k, embed_dim, g_type
         )
 
-        # 动态图组件（优化后的版本）
+        # Optimized dynamic graph component
         self.dynamic_gcn = VectorField_g_optimized(
             input_channels, hidden_channels, hidden_hidden_channels,
             num_hidden_layers, num_nodes, cheb_k, embed_dim, g_type, device,
-            alpha=0.5, topk=10, dropout_rate=0.1,  # 更保守的参数
+            alpha=0.5, topk=10, dropout_rate=0.1,  # More conservative parameters
             **kwargs
         )
 
-        # 可学习的权重参数
-        self.weight_alpha = nn.Parameter(torch.tensor([0.5]))  # 初始偏向静态图
+        # Learnable weight parameters
+        self.weight_alpha = nn.Parameter(torch.tensor([0.5]))  # Initially biased toward the static graph
 
     def forward(self, z):
-        # 静态图输出
+        # Static graph output
         z_static = self.static_gcn(z)
 
-        # 动态图输出
+        # Dynamic graph output
         z_dynamic = self.dynamic_gcn(z)
 
-        # 自适应权重（经过sigmoid确保在0-1之间）
+        # Adaptive weight constrained to [0, 1] by sigmoid
         alpha = torch.sigmoid(self.weight_alpha)
 
-        # 混合输出
+        # Hybrid output
         z_out = alpha * z_static + (1 - alpha) * z_dynamic
 
         return z_out
 
     def get_adjacency_matrix(self):
-        """获取混合图的邻接矩阵"""
-        # 主要返回静态图，因为更稳定
+        """Get the hybrid graph adjacency matrix.."""
+        # Return mainly the static graph because it is more stable
         return self.static_gcn.get_adjacency_matrix()
 
 
 class VectorField_g_dynamic(nn.Module):
     """
-    原始动态图构建方法（保持兼容性）
+    Original dynamic graph construction method kept for compatibility.
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
@@ -286,12 +286,12 @@ class VectorField_g_dynamic(nn.Module):
         self.device = device
         self.alpha = alpha
         self.topk = topk
-        self.g_type = g_type  # 先设置g_type
+        self.g_type = g_type  # Set g_type first
 
         self.linear_in = nn.Linear(hidden_channels, hidden_hidden_channels)
         self.linear_out = nn.Linear(hidden_hidden_channels, hidden_channels * hidden_channels)
 
-        # 动态图构建参数
+        # Dynamic graph construction parameters
         node_dim = hidden_hidden_channels
         self.emb1 = nn.Embedding(self.num_nodes, node_dim)
         self.emb2 = nn.Embedding(self.num_nodes, node_dim)
@@ -299,7 +299,7 @@ class VectorField_g_dynamic(nn.Module):
         self.lin2 = nn.Linear(node_dim, node_dim)
         self.idx = torch.arange(self.num_nodes).to(self.device)
 
-        # 图卷积层 - 简化版本，避免复杂维度问题
+        # Simplified graph convolution layers to avoid complex dimension issues
         self.gcn_layers = nn.ModuleList()
         for _ in range(num_hidden_layers):
             self.gcn_layers.append(
@@ -310,8 +310,8 @@ class VectorField_g_dynamic(nn.Module):
                 )
             )
 
-        # 保留原有的自适应图卷积参数用于兼容
-        # 注意：现在在设置self.g_type之后才使用它
+        # Keep adaptive graph convolution parameters for compatibility
+        # Use self.g_type only after it is set
         if self.g_type == 'agc':
             self.node_embeddings = nn.Parameter(torch.randn(num_nodes, embed_dim), requires_grad=True)
             self.cheb_k = cheb_k
@@ -321,38 +321,38 @@ class VectorField_g_dynamic(nn.Module):
 
     def build_dynamic_graph(self, z):
         """
-        构建动态图结构 - 简化版本
-        z: 输入特征 [batch_size, num_nodes, hidden_dim]
+        Build a dynamic graph structure in a simplified version.
+        z: input features [batch_size, num_nodes, hidden_dim]
         """
         batch_size, num_nodes, hidden_dim = z.shape
 
-        # 初始节点嵌入
+        # Initial node embeddings
         nodevec1 = self.emb1(self.idx)  # [num_nodes, node_dim]
         nodevec2 = self.emb2(self.idx)  # [num_nodes, node_dim]
 
-        # 扩展节点嵌入到batch维度
+        # Expand node embeddings to the batch dimension
         nodevec1 = nodevec1.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, num_nodes, node_dim]
         nodevec2 = nodevec2.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, num_nodes, node_dim]
 
-        # 使用输入特征调整节点嵌入
+        # Adjust node embeddings using input features
         nodevec1 = torch.tanh(self.alpha * (nodevec1 + z))
         nodevec2 = torch.tanh(self.alpha * (nodevec2 + z))
 
-        # 构建邻接矩阵
+        # Build adjacency matrix
         adj = torch.bmm(nodevec1, nodevec2.transpose(1, 2))  # [batch_size, num_nodes, num_nodes]
         adj = F.relu(adj)
 
-        # 稀疏化 - 选择topk邻居
+        # Sparsification: select top-k neighbors
         if self.topk > 0 and self.topk < num_nodes:
             topk_values, topk_indices = torch.topk(adj, self.topk, dim=-1)
             mask = torch.zeros_like(adj)
             mask.scatter_(-1, topk_indices, 1)
             adj = adj * mask
 
-        # 添加自连接并归一化
-        adj = adj + torch.eye(num_nodes).unsqueeze(0).to(self.device)  # 自连接
+        # Add self-connections and normalize
+        adj = adj + torch.eye(num_nodes).unsqueeze(0).to(self.device)  # Self-connection
         row_sum = adj.sum(dim=-1, keepdim=True)
-        adj = adj / (row_sum + 1e-8)  # 归一化
+        adj = adj / (row_sum + 1e-8)  # Normalize
 
         return adj
 
@@ -360,21 +360,21 @@ class VectorField_g_dynamic(nn.Module):
         # z: [batch_size, num_nodes, hidden_channels]
         batch_size, num_nodes, _ = z.shape
 
-        # 线性变换
+        # Linear transform
         z = self.linear_in(z)
         z = F.relu(z)
 
-        # 构建动态图
+        # Build dynamic graph
         adj = self.build_dynamic_graph(z)  # [batch_size, num_nodes, num_nodes]
 
-        # 应用图卷积 - 简化版本：使用矩阵乘法
+        # Apply graph convolution in a simplified matrix-multiplication form
         for gcn_layer in self.gcn_layers:
-            # 图卷积：z = A * z * W
+            # Graph convolution: z = A * z * W
             z_gcn = torch.bmm(adj, z)  # [batch_size, num_nodes, hidden_dim]
             z_gcn = gcn_layer(z_gcn)
-            z = z + z_gcn  # 残差连接
+            z = z + z_gcn  # Residual connection
 
-        # 输出变换
+        # Output transform
         z = self.linear_out(z)
         z = z.view(batch_size, num_nodes, self.hidden_channels, self.hidden_channels)
         z = torch.tanh(z)
@@ -382,15 +382,15 @@ class VectorField_g_dynamic(nn.Module):
         return z
 
     def get_adjacency_matrix(self):
-        """获取动态图的邻接矩阵（用于可视化）"""
+        """Get the dynamic graph adjacency matrix for visualization."""
         with torch.no_grad():
-            # 使用随机输入获取示例邻接矩阵
+            # Use random input to obtain an example adjacency matrix
             dummy_input = torch.randn(1, self.num_nodes, self.hidden_channels).to(self.device)
             adj = self.build_dynamic_graph(dummy_input)
-            return adj.squeeze(0)  # 移除batch维度，返回 [num_nodes, num_nodes]
+            return adj.squeeze(0)  # Remove the batch dimension and return [num_nodes, num_nodes]
 
 
-# 保留原有的VectorField_g类用于兼容性
+# Keep the original VectorField_g class for compatibility
 class VectorField_g(torch.nn.Module):
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers, num_nodes, cheb_k,
                  embed_dim, g_type):
@@ -400,7 +400,7 @@ class VectorField_g(torch.nn.Module):
         self.hidden_channels = hidden_channels
         self.hidden_hidden_channels = hidden_hidden_channels
         self.num_hidden_layers = num_hidden_layers
-        self.g_type = g_type  # 先设置g_type
+        self.g_type = g_type  # Set g_type first
 
         self.linear_in = torch.nn.Linear(hidden_channels, hidden_hidden_channels)
         self.linear_out = torch.nn.Linear(hidden_hidden_channels, hidden_channels * hidden_channels)
@@ -459,7 +459,7 @@ class VectorField_g(torch.nn.Module):
         return supports
 
 
-# 简化的图卷积模块（如果需要）
+# Simplified graph convolution module if needed
 class SimpleGCN(nn.Module):
     def __init__(self, input_dim, output_dim, dropout=0.1):
         super(SimpleGCN, self).__init__()
@@ -469,9 +469,9 @@ class SimpleGCN(nn.Module):
 
     def forward(self, x, adj=None):
         # x: [batch_size, num_nodes, input_dim]
-        # adj: [batch_size, num_nodes, num_nodes] 可选
+        # adj: [batch_size, num_nodes, num_nodes] optional
         if adj is not None:
-            # 如果提供了邻接矩阵，进行图卷积
+            # Apply graph convolution if an adjacency matrix is provided
             x = torch.bmm(adj, x)  # [batch_size, num_nodes, input_dim]
 
         x = self.linear(x)
@@ -482,7 +482,7 @@ class SimpleGCN(nn.Module):
 
 class AdaptiveGraphSparsification(nn.Module):
     """
-    内存优化的自适应图稀疏化模块
+    Memory-optimized adaptive graph sparsification module.
     """
 
     def __init__(self, num_nodes, hidden_dim, min_topk=5, max_topk=30, temperature=1.0,
@@ -494,9 +494,9 @@ class AdaptiveGraphSparsification(nn.Module):
         self.max_topk = max_topk
         self.temperature = temperature
         self.memory_efficient = memory_efficient
-        self.chunk_size = chunk_size  # 分块处理大小
+        self.chunk_size = chunk_size  # Chunk size
 
-        # 简化版topk预测器
+        # Simplified top-k predictor
         self.topk_predictor = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 4),
             nn.ReLU(),
@@ -505,7 +505,7 @@ class AdaptiveGraphSparsification(nn.Module):
             nn.Sigmoid()
         )
 
-        # 轻量级重要性网络
+        # Lightweight importance network
         self.importance_net = nn.Sequential(
             nn.Linear(hidden_dim * 2, hidden_dim // 2),
             nn.ReLU(),
@@ -522,86 +522,86 @@ class AdaptiveGraphSparsification(nn.Module):
                     nn.init.constant_(layer.bias, 0)
 
     def predict_adaptive_topk(self, node_features):
-        """为每个节点预测合适的topk值"""
+        """Predict a suitable top-k value for each node."""
         batch_size, num_nodes, _ = node_features.shape
 
-        # 预测topk比例
+        # Predict top-k ratio
         topk_ratio = self.topk_predictor(node_features).squeeze(-1)
 
-        # 转换为实际的topk值
+        # Convert to actual top-k values
         topk_values = self.min_topk + (self.max_topk - self.min_topk) * topk_ratio
         topk_values = topk_values.long()
 
-        # 确保不超过节点数
+        # Ensure values do not exceed the number of nodes
         topk_values = torch.clamp(topk_values, self.min_topk, min(self.max_topk, num_nodes))
 
         return topk_values
 
     def compute_importance_scores_memory_efficient(self, adj, node_features):
         """
-        内存高效的重要性得分计算
-        使用分块处理避免内存爆炸
+        Memory-efficient importance score computation.
+        Use chunked processing to avoid excessive memory use.
         """
         batch_size, num_nodes, _ = adj.shape
         device = adj.device
 
-        # 初始化重要性得分矩阵
+        # Initialize importance score matrix
         importance_scores = torch.zeros_like(adj)
 
-        # 分块处理
+        # Chunked processing
         for i in range(0, num_nodes, self.chunk_size):
             i_end = min(i + self.chunk_size, num_nodes)
 
             for j in range(0, num_nodes, self.chunk_size):
                 j_end = min(j + self.chunk_size, num_nodes)
 
-                # 获取当前块的节点特征
+                # Get node features for the current chunk
                 node_i_chunk = node_features[:, i:i_end].unsqueeze(2)  # [b, chunk_i, 1, h]
                 node_j_chunk = node_features[:, j:j_end].unsqueeze(1)  # [b, 1, chunk_j, h]
 
-                # 扩展维度以进行批量计算
+                # Expand dimensions for batched computation
                 node_i_expanded = node_i_chunk.expand(-1, -1, j_end - j, -1)
                 node_j_expanded = node_j_chunk.expand(-1, i_end - i, -1, -1)
 
-                # 拼接特征
+                # Concatenate features
                 pair_features = torch.cat([node_i_expanded, node_j_expanded], dim=-1)
 
-                # 计算重要性得分
+                # Compute importance scores
                 chunk_importance = self.importance_net(pair_features).squeeze(-1)
 
-                # 应用原始邻接矩阵的掩码
+                # Apply the original adjacency matrix mask
                 chunk_adj = adj[:, i:i_end, j:j_end]
                 chunk_importance = chunk_importance * chunk_adj
 
-                # 存储结果
+                # Store results
                 importance_scores[:, i:i_end, j:j_end] = chunk_importance
 
         return importance_scores
 
     def compute_importance_scores_fast(self, adj, node_features):
         """
-        快速但近似的重要性得分计算
-        使用矩阵运算而不是成对计算
+        Fast approximate importance score computation.
+        Use matrix operations instead of pairwise computation.
         """
         batch_size, num_nodes, hidden_dim = node_features.shape
 
-        # 使用节点特征的相似度作为重要性得分的近似
-        # 计算节点特征的点积相似度
+        # Use node feature similarity as an approximation of importance scores
+        # Compute dot-product similarity of node features
         node_features_norm = F.normalize(node_features, p=2, dim=-1)
         similarity = torch.bmm(node_features_norm, node_features_norm.transpose(1, 2))
 
-        # 结合原始邻接矩阵
+        # Combine with the original adjacency matrix
         importance_scores = similarity * adj
 
         return importance_scores
 
     def adaptive_sparsify_simple(self, adj, node_features):
         """
-        简化的自适应稀疏化 - 只使用自适应topk
+        Simplified adaptive sparsification using only adaptive top-k.
         """
         batch_size, num_nodes, _ = adj.shape
 
-        # 预测自适应topk值
+        # Predict adaptive top-k values
         topk_values = self.predict_adaptive_topk(node_features)
 
         sparse_adj = torch.zeros_like(adj)
@@ -616,7 +616,7 @@ class AdaptiveGraphSparsification(nn.Module):
 
     def adaptive_sparsify(self, adj, node_features, method='simple'):
         """
-        自适应稀疏化邻接矩阵 - 内存优化版本
+        Adaptive sparsification adjacency matrix in a memory-optimized version.
         """
         if method == 'simple':
             return self.adaptive_sparsify_simple(adj, node_features)
@@ -627,7 +627,7 @@ class AdaptiveGraphSparsification(nn.Module):
             else:
                 importance_scores = self.compute_importance_scores_fast(adj, node_features)
 
-            # 动态阈值
+            # Dynamic threshold
             thresholds = torch.quantile(
                 importance_scores.view(importance_scores.shape[0], -1),
                 0.7, dim=1
@@ -637,27 +637,27 @@ class AdaptiveGraphSparsification(nn.Module):
             sparse_adj = adj * mask.float()
 
         elif method == 'hybrid':
-            # 简化的混合方法 - 先固定topk，再重要性筛选
-            fixed_topk = min(20, self.num_nodes // 10)  # 使用固定topk进行初步筛选
+            # Simplified hybrid method: fixed top-k first, then importance filtering
+            fixed_topk = min(20, self.num_nodes // 10)  # Use fixed top-k for preliminary filtering
 
-            # 第一步：固定topk稀疏化
+            # Step 1: fixed top-k sparsification
             initial_sparse = torch.zeros_like(adj)
             for b in range(adj.shape[0]):
                 for i in range(adj.shape[1]):
                     topk_vals, topk_indices = torch.topk(adj[b, i], fixed_topk)
                     initial_sparse[b, i, topk_indices] = topk_vals
 
-            # 第二步：在稀疏图上计算重要性
+            # Step 2: compute importance on the sparse graph
             importance_scores = self.compute_importance_scores_fast(initial_sparse, node_features)
 
-            # 第三步：自适应topk进一步稀疏化
+            # Step 3: further sparsify with adaptive top-k
             topk_values = self.predict_adaptive_topk(node_features)
 
             sparse_adj = torch.zeros_like(adj)
             for b in range(adj.shape[0]):
                 for i in range(adj.shape[1]):
                     k = min(topk_values[b, i].item(), fixed_topk)
-                    # 在重要性得分上选择topk
+                    # Select top-k by importance score
                     topk_vals, topk_indices = torch.topk(importance_scores[b, i], k)
                     sparse_adj[b, i, topk_indices] = initial_sparse[b, i, topk_indices]
 
@@ -672,7 +672,7 @@ class AdaptiveGraphSparsification(nn.Module):
 
 class GraphAttentionLayer(nn.Module):
     """
-    图注意力层
+    Graph attention layer.
     """
 
     def __init__(self, in_features, out_features, dropout=0.1, alpha=0.2, concat=True):
@@ -683,11 +683,11 @@ class GraphAttentionLayer(nn.Module):
         self.concat = concat
         self.dropout = dropout
 
-        # 线性变换参数
+        # Linear transform parameters
         self.W = nn.Parameter(torch.empty(size=(in_features, out_features)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
 
-        # 注意力参数
+        # Attention parameters
         self.a = nn.Parameter(torch.empty(size=(2 * out_features, 1)))
         nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
@@ -697,35 +697,35 @@ class GraphAttentionLayer(nn.Module):
 
     def forward(self, h, adj=None):
         """
-        h: 输入特征 [batch_size, num_nodes, in_features]
-        adj: 邻接矩阵 [batch_size, num_nodes, num_nodes] (可选)
+        h: input features [batch_size, num_nodes, in_features]
+        adj: adjacency matrix [batch_size, num_nodes, num_nodes] (optional)
         """
         batch_size, num_nodes, _ = h.shape
 
-        # 线性变换
+        # Linear transform
         Wh = torch.matmul(h, self.W)  # [batch_size, num_nodes, out_features]
 
-        # 计算注意力系数
+        # Compute attention coefficients
         Wh1 = torch.matmul(Wh, self.a[:self.out_features, :])  # [batch_size, num_nodes, 1]
         Wh2 = torch.matmul(Wh, self.a[self.out_features:, :])  # [batch_size, num_nodes, 1]
 
-        # 广播相加
+        # Broadcasted addition
         e = Wh1 + Wh2.transpose(1, 2)  # [batch_size, num_nodes, num_nodes]
 
         e = self.leakyrelu(e)
 
-        # 如果提供了邻接矩阵，进行掩码
+        # Apply a mask if an adjacency matrix is provided
         if adj is not None:
             zero_vec = -9e15 * torch.ones_like(e)
             attention = torch.where(adj > 0, e, zero_vec)
         else:
             attention = e
 
-        # 计算注意力权重
+        # Compute attention weights
         attention = F.softmax(attention, dim=-1)
         attention = self.dropout_layer(attention)
 
-        # 应用注意力
+        # Apply attention
         h_prime = torch.matmul(attention, Wh)  # [batch_size, num_nodes, out_features]
 
         if self.concat:
@@ -739,7 +739,7 @@ class GraphAttentionLayer(nn.Module):
 
 class MultiHeadGraphAttention(nn.Module):
     """
-    多头图注意力
+    Multi-head graph attention.
     """
 
     def __init__(self, n_heads, in_features, out_features, dropout=0.1, alpha=0.2, concat=True):
@@ -764,10 +764,10 @@ class MultiHeadGraphAttention(nn.Module):
             outputs.append(attn(h, adj))
 
         if self.concat:
-            # 拼接所有头的输出
+            # Concatenate outputs from all heads
             h_prime = torch.cat(outputs, dim=-1)  # [batch_size, num_nodes, n_heads * out_features]
         else:
-            # 平均所有头的输出
+            # Average outputs from all heads
             h_prime = torch.stack(outputs, dim=-1).mean(dim=-1)
             h_prime = self.merge_layer(h_prime)
 
@@ -776,9 +776,9 @@ class MultiHeadGraphAttention(nn.Module):
 
 class VectorField_g_attention(nn.Module):
     """
-    动态图构建：与论文式 (8)–(11) 一致。
-    每头 h：B_0^h = ReLU(FC(Z))，Sim^h = E^h(E^h)^T / d_h，M^h = σ(FC(Z))∈R^{N×N}，
-    B_1^h = (I + Softmax(ReLU(Sim^h ⊙ M^h))) (B_0^h W_spatial^h)。
+    Dynamic graph construction consistent with Eqs. (8)-(11) in the paper.
+    For each head h: B_0^h = ReLU(FC(Z)), Sim^h = E^h(E^h)^T / d_h, M^h = sigma(FC(Z)) in R^{N x N},
+    B_1^h = (I + Softmax(ReLU(Sim^h * M^h))) (B_0^h W_spatial^h).
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
@@ -806,7 +806,7 @@ class VectorField_g_attention(nn.Module):
         self.per_head_dim = hidden_hidden_channels // n_heads
         self.head_embed_dim = max(embed_dim // n_heads, 1)
 
-        print(f"VectorField_g_attention 初始化: 节点数 = {self.num_nodes} (论文动态图多头)")
+        print(f"VectorField_g_attention initialized: num_nodes = {self.num_nodes} (paper-style multi-head dynamic graph)")
 
         self.fc_b0 = nn.ModuleList([
             nn.Linear(hidden_channels, self.per_head_dim) for _ in range(n_heads)
@@ -814,7 +814,7 @@ class VectorField_g_attention(nn.Module):
         self.node_emb_heads = nn.ModuleList([
             nn.Embedding(num_nodes, self.head_embed_dim) for _ in range(n_heads)
         ])
-        # 式 (10): M^h(t)=σ(FC(Z(t)))∈[0,1]^{N×N}；对节点 i 一行用全连接得到与各点的边权
+        # Eq. (10): M^h(t)=sigma(FC(Z(t))) in [0,1]^{N x N}; a fully connected layer maps each node row to edge weights for all nodes
         self.mask_row_fc = nn.ModuleList([
             nn.Linear(hidden_channels, num_nodes) for _ in range(n_heads)
         ])
@@ -843,7 +843,7 @@ class VectorField_g_attention(nn.Module):
         nn.init.xavier_uniform_(self.linear_out.weight)
 
     def _head_affinity(self, z, h):
-        """A^h = I + Softmax(ReLU(Sim^h ⊙ M^h(t)))，[B,N,N]"""
+        """A^h = I + Softmax(ReLU(Sim^h * M^h(t))),[B,N,N]"""
         _, num_nodes, _ = z.shape
         d_e = self.head_embed_dim
         E = self.node_emb_heads[h](self.idx)
@@ -858,7 +858,7 @@ class VectorField_g_attention(nn.Module):
         return eye + a
 
     def build_dynamic_adjacency_from_z(self, z, reduce="mean"):
-        """供外部 GCN / 可视化：对多头 Aff^h 做平均。"""
+        """Average Aff^h over all heads for external GCN modules or visualization."""
         if z.dim() == 2:
             b_times_n, dim = z.shape
             batch_size = b_times_n // self.num_nodes
@@ -878,7 +878,7 @@ class VectorField_g_attention(nn.Module):
         elif z.dim() == 3:
             batch_size, num_nodes, dim = z.shape
         else:
-            raise ValueError(f"不支持的输入维度: {z.dim()}，仅支持2维或3维")
+            raise ValueError(f"Unsupported input dimension: {z.dim()}; only 2-D or 3-D input is supported")
 
         head_outs = []
         for h in range(self.n_heads):
@@ -911,7 +911,7 @@ class VectorField_g_attention(nn.Module):
 
 class VectorField_g_hybrid_attention(nn.Module):
     """
-    混合图构建：结合静态图和图注意力动态图
+    Hybrid graph construction combining static graph and graph-attention dynamic graph.
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
@@ -924,48 +924,48 @@ class VectorField_g_hybrid_attention(nn.Module):
         self.static_weight = static_weight
         self.g_type = g_type
 
-        # 静态图组件
+        # Static graph component
         self.static_gcn = VectorField_g(
             input_channels, hidden_channels, hidden_hidden_channels,
             num_hidden_layers, num_nodes, cheb_k, embed_dim, g_type
         )
 
-        # 图注意力动态图组件
+        # Graph-attention dynamic graph component
         self.attention_gcn = VectorField_g_attention(
             input_channels, hidden_channels, hidden_hidden_channels,
             num_hidden_layers, num_nodes, cheb_k, embed_dim, g_type, device,
             n_heads=n_heads, attention_dropout=attention_dropout
         )
 
-        # 可学习的权重参数
+        # Learnable weight parameters
         self.weight_alpha = nn.Parameter(torch.tensor([0.5]))
 
     def forward(self, z):
-        # 静态图输出
+        # Static graph output
         z_static = self.static_gcn(z)
 
-        # 图注意力动态图输出
+        # Graph-attention dynamic graph output
         z_attention = self.attention_gcn(z)
 
-        # 自适应权重
+        # Adaptive weight
         alpha = torch.sigmoid(self.weight_alpha)
 
-        # 混合输出
+        # Hybrid output
         z_out = alpha * z_static + (1 - alpha) * z_attention
 
         return z_out
 
     def get_adjacency_matrix(self):
-        """获取混合图的邻接矩阵"""
-        # 主要返回静态图，因为更稳定
+        """Get the hybrid graph adjacency matrix.."""
+        # Return mainly the static graph because it is more stable
         return self.static_gcn.get_adjacency_matrix()
 
 
-# 在 vector_fields.py 中添加专门针对叶绿素数据的图构建方法
+# Add a chlorophyll-specific graph construction method
 class VectorField_g_chlorophyll(nn.Module):
     """
-    专门针对叶绿素数据的图构建方法
-    叶绿素数据通常具有更强的空间相关性和季节性
+    Chlorophyll-specific graph construction method.
+    Chlorophyll data usually has stronger spatial correlation and seasonality.
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,
@@ -982,7 +982,7 @@ class VectorField_g_chlorophyll(nn.Module):
         self.seasonal_weight = seasonal_weight
         self.spatial_weight = spatial_weight
 
-        # 季节性特征提取
+        # Seasonal feature extraction
         self.seasonal_encoder = nn.Sequential(
             nn.Linear(hidden_channels, hidden_hidden_channels // 2),
             nn.ReLU(),
@@ -990,7 +990,7 @@ class VectorField_g_chlorophyll(nn.Module):
             nn.Linear(hidden_hidden_channels // 2, hidden_hidden_channels // 4)
         )
 
-        # 空间特征提取
+        # Spatial feature extraction
         self.spatial_encoder = nn.Sequential(
             nn.Linear(hidden_channels, hidden_hidden_channels // 2),
             nn.ReLU(),
@@ -998,7 +998,7 @@ class VectorField_g_chlorophyll(nn.Module):
             nn.Linear(hidden_hidden_channels // 2, hidden_hidden_channels // 4)
         )
 
-        # 特征融合
+        # Feature fusion
         self.feature_fusion = nn.Sequential(
             nn.Linear(hidden_hidden_channels // 2, hidden_hidden_channels),
             nn.ReLU(),
@@ -1007,7 +1007,7 @@ class VectorField_g_chlorophyll(nn.Module):
 
         self.linear_out = nn.Linear(hidden_hidden_channels, hidden_channels * hidden_channels)
 
-        # 节点嵌入
+        # Node embeddings
         self.node_embeddings = nn.Embedding(num_nodes, embed_dim)
         nn.init.normal_(self.node_embeddings.weight, mean=0, std=0.01)
         self.idx = torch.arange(self.num_nodes).to(self.device)
@@ -1018,26 +1018,26 @@ class VectorField_g_chlorophyll(nn.Module):
         self.use_residual = use_residual
 
     def build_chlorophyll_graph(self, z):
-        """构建针对叶绿素数据的图结构"""
+        """Build a graph structure for chlorophyll data."""
         batch_size, num_nodes, hidden_dim = z.shape
 
-        # 提取季节性特征 (假设时间维度信息在hidden_channels中)
+        # Extract seasonal features assuming temporal information is encoded in hidden_channels
         seasonal_features = self.seasonal_encoder(z)
 
-        # 提取空间特征
+        # Extract spatial features
         spatial_features = self.spatial_encoder(z)
 
-        # 融合特征
+        # Fuse features
         fused_features = torch.cat([seasonal_features, spatial_features], dim=-1)
         fused_features = self.feature_fusion(fused_features)
 
-        # 构建邻接矩阵 - 使用融合特征
+        # Build adjacency matrix using fused features
         node_similarity = torch.bmm(fused_features, fused_features.transpose(1, 2))
 
-        # 使用softmax获得归一化的邻接矩阵
+        # Use softmax to obtain a normalized adjacency matrix
         adj = F.softmax(node_similarity, dim=-1)
 
-        # 添加自连接
+        # Add self-connections
         identity = torch.eye(num_nodes).unsqueeze(0).to(self.device)
         adj = 0.8 * adj + 0.2 * identity
 
@@ -1046,33 +1046,33 @@ class VectorField_g_chlorophyll(nn.Module):
     def forward(self, z):
         batch_size, num_nodes, _ = z.shape
 
-        # 构建针对叶绿素数据的图
+        # Build graph for chlorophyll data
         adj, features = self.build_chlorophyll_graph(z)
 
-        # 图卷积操作
+        # Graph convolution operation
         z_gcn = torch.bmm(adj, features)
 
-        # 残差连接
+        # Residual connection
         if self.use_residual:
             z_gcn = z_gcn + features
 
-        # 层归一化
+        # Layer normalization
         if hasattr(self, 'layer_norm'):
             z_gcn = self.layer_norm(z_gcn)
 
-        # 输出变换
+        # Output transform
         z_out = self.linear_out(z_gcn)
         z_out = z_out.view(batch_size, num_nodes, self.hidden_channels, self.hidden_channels)
         z_out = torch.tanh(z_out)
 
         return z_out
 
-# 在文件末尾添加以下代码
+# Additional compatibility code at the end of the file
 
 class VectorField_g_enhanced(VectorField_g_attention):
     """
-    与 VectorField_g_attention 相同的论文动态图 (8)–(11)；
-    保留类名与扩展参数以兼容旧入口（make_model_enhanced / 检查点脚本）。
+    Paper-style dynamic graph from Eqs. (8)-(11), same as VectorField_g_attention;
+    keep the class name and extended parameters for compatibility with legacy entry points (make_model_enhanced / checkpoint scripts).
     """
 
     def __init__(self, input_channels, hidden_channels, hidden_hidden_channels, num_hidden_layers,

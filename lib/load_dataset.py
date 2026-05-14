@@ -53,5 +53,5 @@ if __name__ == "__main__":
     dataset_name = "nanhai"
     print(f"\nLoading dataset: {dataset_name!r}")
     arr = load_st_dataset(dataset_name)
-    print(f"\nOK — shape: {arr.shape}")
+    print(f"\nOK - shape: {arr.shape}")
     print("\n--- end self-test ---")

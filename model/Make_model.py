@@ -3,10 +3,10 @@ from model.vector_fields import *
 
 
 def _vector_field_g_dynamic_paper(args):
-    """动态图统一为论文式 (8)–(11)，见 VectorField_g_attention。"""
+    """Use the paper-style dynamic graph from Eqs. (8)-(11); see VectorField_g_attention."""
     gm = getattr(args, 'graph_method', 'attention')
     if gm != 'attention':
-        print(f"注意: graph_method={gm} 已忽略，动态图仅保留论文多头 Sim⊙Mask+残差形式")
+        print(f"Warning: graph_method={gm} is ignored; using paper-style multi-head Sim*Mask plus residual dynamic graph")
     return VectorField_g_attention(
         input_channels=args.input_dim,
         hidden_channels=args.hid_dim,
@@ -33,10 +33,10 @@ def make_model(args):
                                      num_hidden_layers=args.num_layers)
 
         if hasattr(args, 'use_dynamic_graph') and args.use_dynamic_graph:
-            print("动态图: 论文式多头 Sim⊙Mask + (I+Softmax) 消息传播")
+            print("Dynamic graph: paper-style multi-head Sim*Mask + (I+Softmax) message passing")
             vector_field_g = _vector_field_g_dynamic_paper(args)
         else:
-            print("使用静态图构建...")
+            print("Using static graph construction...")
             vector_field_g = VectorField_g(
                 input_channels=args.input_dim,
                 hidden_channels=args.hid_dim,
@@ -55,13 +55,13 @@ def make_model(args):
         return model, vector_field_f, vector_field_g
 
     elif args.model_type == 'type1_spatial':
-        print("=== 运行 w/o NRDE 消融实验 ===")
-        print("使用离散GCN层代替神经粗糙微分方程")
+        print("=== Running w/o NRDE ablation experiment ===")
+        print("Using discrete GCN layers instead of neural rough differential equations")
 
         if hasattr(args, 'use_dynamic_graph') and args.use_dynamic_graph:
             vector_field_g = _vector_field_g_dynamic_paper(args)
         else:
-            print("使用静态图构建...")
+            print("Using static graph construction...")
             vector_field_g = VectorField_g(
                 input_channels=args.input_dim,
                 hidden_channels=args.hid_dim,
@@ -82,7 +82,7 @@ def make_model(args):
         return model, None, vector_field_g
 
     elif args.model_type == 'type1_temporal_only':
-        print("=== 运行 w/o Augmented ODE - 仅时间NRDE ===")
+        print("=== Running w/o Augmented ODE - temporal NRDE only ===")
         vector_field_f = FinalTanh_f(input_channels=args.input_dim, hidden_channels=args.hid_dim,
                                      hidden_hidden_channels=args.hid_hid_dim,
                                      num_hidden_layers=args.num_layers)
@@ -91,7 +91,7 @@ def make_model(args):
         return model, vector_field_f, None
 
     elif args.model_type == 'type1_spatial_only':
-        print("=== 运行 w/o Augmented ODE - 仅空间NRDE ===")
+        print("=== Running w/o Augmented ODE - spatial NRDE only ===")
         if hasattr(args, 'use_dynamic_graph') and args.use_dynamic_graph:
             vector_field_g = _vector_field_g_dynamic_paper(args)
         else:
@@ -111,15 +111,15 @@ def make_model(args):
 
     else:
         raise ValueError(
-            f"不支持的model_type: {args.model_type}，可选值：type1/type1_spatial/type1_temporal_only/type1_spatial_only")
+            f"Unsupported model_type: {args.model_type}; valid options: type1/type1_spatial/type1_temporal_only/type1_spatial_only")
 
 
 def make_model_simple(args):
-    """简化版模型创建函数，用于快速消融实验"""
-    print(f"创建模型: {args.model_type}")
+    """Simplified model factory for quick ablation experiments."""
+    print(f"Creating model: {args.model_type}")
 
     if args.model_type == 'type1_spatial':
-        print("创建离散GCN模型（w/o NRDE）...")
+        print("Creating discrete GCN model (w/o NRDE)...")
 
         if args.use_dynamic_graph:
             vector_field_g = _vector_field_g_dynamic_paper(args)
@@ -148,11 +148,11 @@ def make_model_simple(args):
 
 
 def make_model_enhanced(args):
-    """创建增强版GCDE模型"""
+    """Create the enhanced GCDE model."""
     print("=" * 50)
-    print("创建增强版GCDE模型（动态图与 VectorField_g_attention 一致）")
-    print(f"模型类型: {args.model_type}")
-    print(f"注意力头数: {getattr(args, 'n_heads', 4)}")
+    print("Creating enhanced GCDE model (dynamic graph consistent with VectorField_g_attention)")
+    print(f"Model type: {args.model_type}")
+    print(f"Number of attention heads: {getattr(args, 'n_heads', 4)}")
     print("=" * 50)
 
     if args.model_type == 'type1':
@@ -201,4 +201,4 @@ def make_model_enhanced(args):
         return model, vector_field_f, vector_field_g
 
     else:
-        raise ValueError(f"增强版模型仅支持model_type='type1'")
+        raise ValueError("The enhanced model only supports model_type='type1'")
